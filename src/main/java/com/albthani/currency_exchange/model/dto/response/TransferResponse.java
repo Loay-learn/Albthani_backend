@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -22,7 +23,7 @@ public class TransferResponse {
     private String referenceNumber;
     private String fromCurrency;
     private String screenshotUrl;
-    private String confirmationImage;
+    private List<String> confirmationImages;
     private String toCurrency;
     private BigDecimal amount;
     private String customerBankName;

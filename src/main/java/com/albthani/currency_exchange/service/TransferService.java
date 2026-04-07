@@ -23,9 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -123,7 +121,7 @@ public class TransferService {
             UUID transferId,
             TransferStatus status,
             String note,
-            MultipartFile receipt, // 👈 الحقل الجديد لاستقبال الصورة
+            List<MultipartFile> receipts, // 👈 الحقل الجديد لاستقبال الصورة
             User adminUser) {
 
         TransferRequest transfer = transferRepo.findById(transferId)
@@ -141,12 +139,19 @@ public class TransferService {
         }
 
         // 2. معالجة الملف (إشعار التأكيد)
-        if (receipt != null && !receipt.isEmpty()) {
+        if (receipts != null && !receipts.isEmpty()) {
             try {
-                // هنا نستخدم خدمة حفظ الملفات (افترضت أن اسمها fileService)
-                // ستقوم بحفظ الملف في مجلد 'receipts' وترجع اسم الملف أو مساره
-                String fileName = fileUploadService.uploadConfirmationImage(receipt);
-                transfer.setConfirmationImage(fileName); // 👈 تأكد من وجود هذا الحقل في الـ Entity
+                // رفع كل الصور لـ Cloudinary وجمع الروابط في قائمة
+                List<String> imageUrls = receipts.stream()
+                        .filter(file -> !file.isEmpty())
+                        .map(fileUploadService::uploadConfirmationImage)
+                        .toList();
+
+                // 👈 التعديل هنا: إضافة الروابط الجديدة للقائمة المخزنة في الـ Entity (jsonb)
+                if (transfer.getConfirmationImages() == null) {
+                    transfer.setConfirmationImages(new ArrayList<>());
+                }
+                transfer.getConfirmationImages().addAll(imageUrls);
             } catch (Exception e) {
                 throw new BusinessException("فشل حفظ إشعار التأكيد: " + e.getMessage());
             }
@@ -162,13 +167,19 @@ public class TransferService {
         transferRepo.save(transfer);
 
         // ─── أرسل إيميل للمستخدم عند القبول ───
+        // داخل ميثود processTransfer في كلاس TransferService
         if (status == TransferStatus.COMPLETED) {
             try {
                 String email = transfer.getUser().getEmail();
-                String confirmationUrl = transfer.getConfirmationImage() != null
-                        ? "http://localhost:8080/" + transfer.getConfirmationImage()
-                        : null;
-                emailService.sendTransferCompleted(email, transfer, confirmationUrl);
+
+                // نمرر القائمة كاملة (حتى لو كانت فارغة سيمرر قائمة فارغة وليس null)
+                List<String> allImages = transfer.getConfirmationImages() != null
+                        ? transfer.getConfirmationImages()
+                        : new ArrayList<>();
+
+                // تحديث استدعاء الميثود لتقبل القائمة
+                // الاستدعاء الجديد البسيط
+                emailService.sendTransferCompleted(transfer.getUser().getEmail(), transfer);
             } catch (Exception e) {
                 System.err.println("فشل إرسال إيميل الاكتمال: " + e.getMessage());
             }
@@ -223,7 +234,7 @@ public class TransferService {
                 .screenshotUrl(entity.getScreenshotUrl())
                 .fromCurrency(entity.getFromCurrency())
                 .toCurrency(entity.getToCurrency())
-                .confirmationImage(entity.getConfirmationImage())
+                .confirmationImages(entity.getConfirmationImages())
                 .customerAccountName(entity.getCustomerAccountName())
                 .reservedBy(entity.getReservedBy())
                 .processedBy(entity.getProcessedBy())

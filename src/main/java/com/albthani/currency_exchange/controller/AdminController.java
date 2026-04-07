@@ -71,17 +71,20 @@ public class AdminController {
         return ResponseEntity.ok(new GlobalResponse<>("تم حجز الطلب بنجاح"));
     }
 
-    // ─── قبول أو رفض طلب مع إضافة إشعار تأكيد ───
+    // ─── قبول أو رفض طلب مع إضافة إشعارات تأكيد متعددة ───
     @PatchMapping(value = "/transfers/{id}/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<GlobalResponse<String>> processTransfer(
             @PathVariable UUID id,
             @RequestParam TransferStatus status,
             @RequestParam(required = false) String note,
-            @RequestPart(value = "receipt", required = false) MultipartFile receipt, // 👈 الحقل الجديد
+            // 👈 التعديل هنا: نستخدم List لاستقبال أكثر من ملف
+            @RequestPart(value = "receipts", required = false) List<MultipartFile> receipts,
             @AuthenticationPrincipal User adminUser) {
 
-        transferService.processTransfer(id, status, note, receipt, adminUser);
-        return ResponseEntity.ok(new GlobalResponse<>("تم تحديث حالة الطلب وإضافة التأكيد"));
+        // تمرير القائمة مباشرة للخدمة
+        transferService.processTransfer(id, status, note, receipts, adminUser);
+
+        return ResponseEntity.ok(new GlobalResponse<>("تم تحديث حالة الطلب وإضافة صور التأكيد بنجاح"));
     }
 
     // ─── كل المستخدمين ───
